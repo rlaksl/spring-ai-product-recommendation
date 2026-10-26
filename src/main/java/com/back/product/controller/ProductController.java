@@ -77,15 +77,15 @@ public class ProductController {
 
   // chat
   @PostMapping("/chat")
-  public ResponseEntity<ProductChatService.ChatResponse> chat(@RequestBody ChatRequest request) {
-    return ResponseEntity.ok(productChatService.chat(request.message()));
+  public ResponseEntity<ProductChatService.ChatResponse> chat(@RequestBody ChatRequest request, @RequestParam String userId) {
+    return ResponseEntity.ok(productChatService.chat(request.message(), userId));
   }
 
   @GetMapping(value = "/chat/stream", produces = "text/event-stream;charset=UTF-8")
-  public SseEmitter chatStream(@RequestParam String message) {
+  public SseEmitter chatStream(@RequestParam String message, @RequestParam String userId) {
     SseEmitter emitter = new SseEmitter(0L); // 0 : 서버 쪽 타임아웃 없음
 
-    Disposable subscription = productChatService.chatStream(message).subscribe(
+    Disposable subscription = productChatService.chatStream(message, userId).subscribe(
         token -> {
           try {
             // 토큰을 JSON({"content":" How"})으로 보내야 앞 공백이 사라지지 않는다
