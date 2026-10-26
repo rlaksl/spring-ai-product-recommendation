@@ -1,12 +1,13 @@
 package com.back.product.service;
 
-import co.elastic.clients.elasticsearch._types.KnnSearch;
 import com.back.product.document.ProductDocument;
 import com.back.product.entity.Product;
+import com.back.product.entity.ProductKeyword;
 import com.back.product.repository.ProductDocumentRepository;
 import com.back.product.repository.ProductRepository;
+import co.elastic.clients.elasticsearch._types.KnnSearch;
+import lombok.RequiredArgsConstructor;
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.elasticsearch.client.elc.ElasticsearchTemplate;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.core.SearchHit;
@@ -14,21 +15,22 @@ import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 @Service
+@RequiredArgsConstructor
 public class ProductService {
-  @Autowired
-  private ProductRepository productRepository;
-  @Autowired
-  private ProductDocumentRepository productDocumentRepository;
-  @Autowired
-  private EmbeddingModel embeddingModel;
-  @Autowired
-  private ElasticsearchTemplate elasticsearchTemplate;
+  private final ProductRepository productRepository;
+  private final ProductDocumentRepository productDocumentRepository;
+  private final EmbeddingModel embeddingModel;
+  private final ElasticsearchTemplate elasticsearchTemplate;
 
   // 1) PostgreSQL에 상품 저장 → 2) 키워드 임베딩 → 3) Elasticsearch에 벡터 저장
   // 두 저장소는 하나의 트랜잭션으로 묶이지 않는다. 3)이 실패하면 "DB에는 있지만 검색되지 않는 상품"이 생긴다.
@@ -77,6 +79,32 @@ public class ProductService {
   public List<Product> knnSearch(String query, int k) {
     float[] queryVector = embeddingModel.embed(query);
     return findProductsByVector(queryVector, k);
+  }
+
+  // 여러 키워드를 각각 임베딩한 뒤 평균 벡터로 검색한다 (상품 벡터를 만드는 방식과 같다)
+  public List<Product> knnSearch(List<String> keywords, int k) {
+    if (keywords == null || keywords.isEmpty()) {
+      return List.of();
+    }
+    float[] queryVector = calculateAverage(embeddingModel.embed(keywords));
+    return findProductsByVector(queryVector, k);
+  }
+
+  // 기준 상품의 키워드로 검색하고, 1위로 나오는 기준 상품 자신은 뺀다
+  // (Elasticsearch 9.x는 저장한 벡터를 _source로 돌려주지 않으므로 키워드로 다시 임베딩한다)
+  @Transactional(readOnly = true)
+  public List<Product> findSimilarProducts(Long productId, int k) {
+    Product product = productRepository.findById(productId)
+        .orElseThrow(() -> new RuntimeException("Product not found: " + productId));
+
+    List<String> keywords = product.getKeywords().stream()
+        .map(ProductKeyword::getKeyword)
+        .toList();
+
+    return knnSearch(keywords, k + 1).stream()
+        .filter(p -> !p.getId().equals(productId))
+        .limit(k)
+        .toList();
   }
 
   private List<Product> findProductsByVector(float[] queryVector, int k) {
