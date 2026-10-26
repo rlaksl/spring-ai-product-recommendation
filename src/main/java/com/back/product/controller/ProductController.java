@@ -81,7 +81,7 @@ public class ProductController {
     return ResponseEntity.ok(productChatService.chat(request.message()));
   }
 
-  @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @GetMapping(value = "/chat/stream", produces = "text/event-stream;charset=UTF-8")
   public SseEmitter chatStream(@RequestParam String message) {
     SseEmitter emitter = new SseEmitter(0L); // 0 : 서버 쪽 타임아웃 없음
 
