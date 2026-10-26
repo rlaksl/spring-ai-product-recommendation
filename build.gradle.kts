@@ -26,6 +26,7 @@ dependencies {
   // database
   implementation("org.springframework.boot:spring-boot-starter-data-jpa")
   implementation("org.springframework.boot:spring-boot-starter-data-elasticsearch")
+  implementation("org.hibernate.orm:hibernate-vector") // pgvector의 vector 타입을 Hibernate가 다룰 수 있게 한다
 
   // spring ai
   implementation("org.springframework.ai:spring-ai-starter-model-openai")
